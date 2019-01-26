@@ -1,0 +1,6 @@
+# DS6372-GroupProject1
+
+#placeholder
+MSDS 6372 Project 1 Description
+There are two main objectives for Project 1.  Since each group will be using their own data set, there will be a little flexibility in what needs to be delivered.
+Below is a summary of what is absolutely necessary as part of your report. 
