@@ -1,0 +1,118 @@
+---
+title: "Project_1"
+author: "Charles, Lei, John"
+date: "2/1/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(leaps)
+library(caret)
+library(car)
+
+
+#Set path to housing data.
+Project <- "C:/Users/N1110/Desktop/train_clean_final.csv"
+
+HousingData <- read.csv(Project)
+dim(HousingData)
+Housing <- HousingData[, -c(1,7,15,73:76,79)] #Removes unnessary predictor columns from dataset
+#Features removed: Id, Alley, Condition2, PoolQC, Fense, MiscFeature, MiscVal, SaleType
+
+#dim(Housing)
+#(1460,73)
+
+head(Housing)
+
+
+```
+
+
+```{r Train and Test Samples}
+#Following code creates training and test samples. 
+set.seed(1234)
+index<-sample(1:dim(Housing)[1],1460/2,replace=F)
+train<-Housing[index,]
+test<-Housing[-index,]
+
+#Forward
+reg.fwd=regsubsets(SalePrice~.,data=train, method = "forward", really.big = T, nvmax = 20)
+
+coef(reg.fwd,3)
+
+summary(reg.fwd)$adjr2
+summary(reg.fwd)$rss
+summary(reg.fwd)$bic
+
+
+par(mfrow=c(1,3))
+bics<-summary(reg.fwd)$bic
+plot(1:21,bics,type="l",ylab="BIC",xlab="# of predictors")
+index<-which(bics==min(bics))
+points(index,bics[index],col="red",pch=10)
+
+adjr2<-summary(reg.fwd)$adjr2
+plot(1:21,adjr2,type="l",ylab="Adjusted R-squared",xlab="# of predictors")
+index<-which(adjr2==max(adjr2))
+points(index,adjr2[index],col="red",pch=10)
+
+rss<-summary(reg.fwd)$rss
+plot(1:21,rss,type="l",ylab="train RSS",xlab="# of predictors")
+index<-which(rss==min(rss))
+points(index,rss[index],col="red",pch=10)
+
+
+car::vif(lm(SalePrice~HouseStyle+GrLivArea+SaleCondition,data=Housing))
+
+housing.fwdfit<-lm(SalePrice~HouseStyle+GrLivArea+SaleCondition, data = train)
+
+par(mfrow=c(2,2))
+plot(housing.fwdfit)
+```
+
+```{r}
+summary(housing.fwdfit)
+```
+
+
+###Lasso
+```{r}
+library(glmnet)
+
+#Formatting data for GLM net
+x=model.matrix(SalePrice~.,train)[,-1]
+y=log(train$SalePrice)
+
+
+xtest<-model.matrix(SalePrice~.,test)[,-1]
+ytest<-log(test$SalePrice)
+
+#dim(train)
+#str(train)
+#str(x)
+#str(y)
+
+grid=10^seq(10,-2, length =730)
+lasso.mod=glmnet(x,y,alpha=1, lambda =grid)
+
+cv.out=cv.glmnet(x,y,alpha=1) #alpha=1 performs LASSO
+plot(cv.out)
+
+
+bestlambda<-cv.out$lambda.min  #Optimal penalty parameter.  You can make this call visually.
+lasso.pred=predict (lasso.mod ,s=bestlambda ,newx=xtest)
+
+testMSE_LASSO<-mean((ytest-lasso.pred)^2)
+testMSE_LASSO
+
+
+coef(lasso.mod,s=bestlambda)
+```
+
+
+
