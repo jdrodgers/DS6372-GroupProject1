@@ -76,6 +76,16 @@ plot(housing.fwdfit)
 summary(housing.fwdfit)
 ```
 
+```{r}
+housing.fwdTest<-lm(SalePrice~HouseStyle+GrLivArea+SaleCondition, data = test)
+
+par(mfrow=c(2,2))
+plot(housing.fwdTest)
+
+summary(housing.fwdTest)
+
+```
+
 
 
 
