@@ -17,7 +17,9 @@ library(car)
 
 
 #Set path to housing data.
-Project <- "C:/Users/N1110/Desktop/train_clean_final.csv"
+# JR - Changed path to be relative path assuming rproj file in same directory as rmd files. 
+#       Should help with running it on separate workstations
+Project <- "./ImportedFiles/train_clean_final.csv"
 
 HousingData <- read.csv(Project)
 dim(HousingData)
@@ -41,7 +43,7 @@ train<-Housing[index,]
 test<-Housing[-index,]
 
 #Forward
-reg.fwd=regsubsets(SalePrice~.,data=train, method = "forward", really.big = T, nvmax = 20)
+reg.fwd<-regsubsets(SalePrice~.,data=train, method = "forward", really.big = T, nvmax = 20)
 
 coef(reg.fwd,3)
 
@@ -83,6 +85,10 @@ summary(housing.fwdfit)
 ###Lasso
 ```{r}
 library(glmnet)
+
+# JR - Added line to eliminate NAs.  Not sure if correct solution, but allowed lasso to run.
+# https://stackoverflow.com/questions/6447708/model-matrix-generates-fewer-rows-than-original-data-frame
+train <- na.omit(train)
 
 #Formatting data for GLM net
 x=model.matrix(SalePrice~.,train)[,-1]
