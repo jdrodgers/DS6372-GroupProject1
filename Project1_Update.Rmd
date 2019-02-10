@@ -19,7 +19,7 @@ library(car)
 #Set path to housing data.
 # JR - Changed path to be relative path assuming rproj file in same directory as rmd files. 
 #       Should help with running it on separate workstations
-Project <- "/Users/Chase/Desktop/MSDS/MSDS6306/Homework/SMU_MSDS_Homework/Case_Study_1/DS6372-GroupProject1/ImportedFiles/train_clean_final.csv"
+Project <- "./ImportedFiles/train_clean_final.csv"
 
 HousingData <- read.csv(Project)
 dim(HousingData)
