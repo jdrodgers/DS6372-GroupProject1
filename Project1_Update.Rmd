@@ -276,12 +276,22 @@ plot(backward.enhanced)
 
 ```
 
+After consolidating the backwards regression suggested features went through removing features with a statistically insignificant p-value, removed:
+OverallCond
+HeatingQCPo
+FunctionalTyp
+
 ```{r backward enhanced model 2}
 backward.enhanced2 <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+RoofMat.dummy+Exterior1st.dummy+BsmtFinType1Unf+BsmtFinSF1+Fireplaces, data = train.new)
 
 summary(backward.enhanced2)
 plot(backward.enhanced2)
 ```
+
+Continued removed statistically insignificant p-value features from model, removed:
+Roofmat.dummy
+Exterior1st.dummy
+BsmtFinType1Unf
 
 ```{r backward enhanced model 3}
 #Used code below to experiment with altering the dummy variables for neighborhood to make only have signifigant p-values for neighborhood otherwise changed to other. No successful gains on adjust r squared with changes. 
@@ -327,6 +337,16 @@ plot3<-ggplot(backward.enhanced3.fits, aes(x=residuals)) +
 grid.arrange(plot1, plot2, plot3, ncol=3)
 ```
 
+Ideal backward inspired model:
+LotArea
+Neighborhood with options being NridgHt, NoRidge, StoneBr, and all others labeled Others
+BldgTypeTwnhsE
+OverallQual
+YearBuilt
+BsmtFinSF1
+Fireplaces
+
+
 ```{r test data anaylsis}
 
 test.backward <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = test.new)
@@ -351,7 +371,7 @@ test.plot3<-ggplot(test.backward.fits, aes(x=residuals)) +
 
 grid.arrange(test.plot1, test.plot2, test.plot3, ncol=3)
 ```
-After 
+
 
 ```{r Stepwise}
 
