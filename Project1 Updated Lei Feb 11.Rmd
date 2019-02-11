@@ -1,0 +1,494 @@
+---
+title: "Project_1"
+author: "Charles, Lei, John"
+date: "2/1/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(leaps)
+library(caret)
+library(car)
+
+
+#Set path to housing data.
+# JR - Changed path to be relative path assuming rproj file in same directory as rmd files. 
+#       Should help with running it on separate workstations
+Project <- "C:/Users/N1110/Desktop/train_clean_final.csv"
+
+HousingData <- read.csv(Project)
+dim(HousingData)
+
+```
+```{r}
+####UPDATE 1 EDA ####
+#Too many missing values, remove: in LotFrontage 259, FirePlaceQu 690, PoolQC 1453,MiscFeature 1406
+# Fence 1179, actually not missing value but one level of factor, need transform. or how to deal with it??suggestion? remove for now for further analysis.
+#These have less than  100 missing values, keep in dataset: Alley, BsmtQual, BsmtCond, BsmtExposure, BsmtFinType1, BsmtFinType2, GarageType, GarageYrBlt, GarageFinish, GarageQual, GarageCond, MasVnrArea 8
+
+
+#Report NA count, put in data frame for easier display options using kable
+naCountDF <-as.data.frame(sapply(HousingData, function(x) sum(length(which(is.na(x))))))
+names(naCountDF) <- ("NA Count") # rename columns
+
+# Print the NA Counts by State
+
+library(kableExtra)
+kable(naCountDF,format="html", caption="Table -NA Count (NA=blanks)",align='c') %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F)
+
+```
+
+####EDA, find out the column index for "FireplaceQu"
+```{r}
+#str(HousingData)
+
+which( colnames(HousingData)=="FireplaceQu" )
+
+```
+####Removes unnessary predictor columns from dataset
+```{r}
+
+Housing <- HousingData[, -c(1,4,7,15,58,73:76,79)] #Removes unnessary predictor columns from dataset
+#Features removed: Id, Alley, Condition2, PoolQC, Fense, MiscFeature, MiscVal, SaleType
+
+#4 LotFrontage too mnay missing data  259
+#FireplaceQu has need to be removed
+
+#dim(Housing)
+#(1460   71)
+
+head(Housing)
+```
+
+####EDA
+####UPDATE 2.11 LEI. 
+####correlation matrix for continous varaibles, remove obvious correlated predictors. 
+```{r}
+#str(Housing)
+
+#choose only numeric columns
+nums <- unlist(lapply(Housing, is.numeric)) 
+DFnum<- Housing[ , nums]
+
+#head(DFnum)
+#str(DFnum)
+#36 predictors num
+
+# create correlation matrix, heatmap of correlation matrix is for visual reference when selecting the important features; we can not only rely on heatmap.
+cormat <- round(cor(DFnum),2)
+
+#head(cormat)
+
+library(reshape2)
+
+melted_cormat <- melt(cormat)
+
+#head(melted_cormat)
+
+
+library(ggplot2)
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+
+  geom_tile()+ggtitle("Pearson correlation coefficient matrix for all numeric variables")
+
+
+# Get upper triangle of the correlation matrix
+
+  get_upper_tri <- function(cormat){
+
+    cormat[lower.tri(cormat)]<- NA
+
+    return(cormat)
+
+  }
+upper_tri <- get_upper_tri(cormat)
+upper_tri 
+
+```
+
+```{r Train and Test Samples}
+#Following code creates training and test samples. 
+set.seed(1234)
+index<-sample(1:dim(Housing)[1],1460/2,replace=F)
+train<-Housing[index,]
+test<-Housing[-index,]
+
+#Forward
+reg.fwd<-regsubsets(SalePrice~.,data=train, method = "forward", really.big = T, nvmax = 60)
+
+coef(reg.fwd,3)
+
+summary(reg.fwd)$adjr2
+summary(reg.fwd)$rss
+summary(reg.fwd)$bic
+
+
+par(mfrow=c(1,3))
+bics<-summary(reg.fwd)$bic
+plot(1:61,bics,type="l",ylab="BIC",xlab="# of predictors")
+index<-which(bics==min(bics))
+points(index,bics[index],col="red",pch=10)
+
+adjr2<-summary(reg.fwd)$adjr2
+plot(1:61,adjr2,type="l",ylab="Adjusted R-squared",xlab="# of predictors")
+index<-which(adjr2==max(adjr2))
+points(index,adjr2[index],col="red",pch=10)
+
+rss<-summary(reg.fwd)$rss
+plot(1:61,rss,type="l",ylab="train RSS",xlab="# of predictors")
+index<-which(rss==min(rss))
+points(index,rss[index],col="red",pch=10)
+
+
+car::vif(lm(SalePrice~HouseStyle+GrLivArea+SaleCondition,data=Housing))
+
+housing.fwdfit<-lm(SalePrice~HouseStyle+GrLivArea+SaleCondition, data = train)
+
+par(mfrow=c(2,2))
+plot(housing.fwdfit)
+```
+
+```{r}
+summary(housing.fwdfit)
+```
+
+####UPDATE 2.11 LEI. 
+####log transform SalePrice, based on diagnotics (looks bad when fit the orginial data: fan out residuals, QQplot does not look normal)
+
+```{r}
+Housing$LogSalePrice=log(Housing$SalePrice)
+str(Housing )
+head(Housing)
+
+```
+#remove Housing$SalePrice column for further analysis
+```{r}
+
+Housing<- Housing[,-71]
+
+head(Housing)
+```
+
+#### forward model on log transformed data
+
+```{r}
+set.seed(1234)
+index<-sample(1:dim(Housing)[1],1460/2,replace=F)
+train<-Housing[index,]
+test<-Housing[-index,]
+
+#Forward
+reg.fwd<-regsubsets(LogSalePrice~.,data=train, method = "forward", really.big = T, nvmax = 60)
+
+coef(reg.fwd,3)
+
+summary(reg.fwd)$adjr2
+summary(reg.fwd)$rss
+summary(reg.fwd)$bic
+
+
+par(mfrow=c(1,3))
+bics<-summary(reg.fwd)$bic
+plot(1:61,bics,type="l",ylab="BIC",xlab="# of predictors")
+index<-which(bics==min(bics))
+points(index,bics[index],col="red",pch=10)
+
+adjr2<-summary(reg.fwd)$adjr2
+plot(1:61,adjr2,type="l",ylab="Adjusted R-squared",xlab="# of predictors")
+index<-which(adjr2==max(adjr2))
+points(index,adjr2[index],col="red",pch=10)
+
+rss<-summary(reg.fwd)$rss
+plot(1:61,rss,type="l",ylab="train RSS",xlab="# of predictors")
+index<-which(rss==min(rss))
+points(index,rss[index],col="red",pch=10)
+
+
+car::vif(lm(LogSalePrice~HouseStyle+GrLivArea+SaleCondition,data=Housing))
+
+housing.fwdfit<-lm(LogSalePrice~HouseStyle+GrLivArea+SaleCondition, data = train)
+
+par(mfrow=c(2,2))
+plot(housing.fwdfit)
+```
+
+
+```{r Backward}
+#Backward
+reg.back<-regsubsets(SalePrice~.,data=train, method = "backward", really.big = T, nvmax = 60)
+
+coef(reg.back,3)
+
+summary(reg.back)$adjr2
+summary(reg.back)$rss
+summary(reg.back)$bic
+
+
+par(mfrow=c(1,3))
+bics<-summary(reg.back)$bic
+plot(1:61,bics,type="l",ylab="BIC",xlab="# of predictors")
+index<-which(bics==min(bics))
+points(index,bics[index],col="red",pch=10)
+
+adjr2<-summary(reg.back)$adjr2
+plot(1:61,adjr2,type="l",ylab="Adjusted R-squared",xlab="# of predictors")
+index<-which(adjr2==max(adjr2))
+points(index,adjr2[index],col="red",pch=10)
+
+rss<-summary(reg.back)$rss
+plot(1:61,rss,type="l",ylab="train RSS",xlab="# of predictors")
+index<-which(rss==min(rss))
+points(index,rss[index],col="red",pch=10)
+
+
+car::vif(lm(SalePrice~OverallQual+Functional+Fireplaces,data=Housing))
+
+housing.backfit<-lm(SalePrice~OverallQual+Functional+Fireplaces, data = train)
+
+par(mfrow=c(2,2))
+plot(housing.backfit)
+```
+###
+```{r}
+summary(housing.backfit)
+```
+
+```{r Stepwise}
+#Stepwise
+reg.step<-regsubsets(SalePrice~.,data=train, method = "seqrep", really.big = T, nvmax = 60)
+
+coef(reg.step,3)
+
+summary(reg.step)$adjr2
+summary(reg.step)$rss
+summary(reg.step)$bic
+
+
+par(mfrow=c(1,3))
+bics<-summary(reg.step)$bic
+plot(1:61,bics,type="l",ylab="BIC",xlab="# of predictors")
+index<-which(bics==min(bics))
+points(index,bics[index],col="red",pch=10)
+
+adjr2<-summary(reg.step)$adjr2
+plot(1:61,adjr2,type="l",ylab="Adjusted R-squared",xlab="# of predictors")
+index<-which(adjr2==max(adjr2))
+points(index,adjr2[index],col="red",pch=10)
+
+rss<-summary(reg.step)$rss
+plot(1:61,rss,type="l",ylab="train RSS",xlab="# of predictors")
+index<-which(rss==min(rss))
+points(index,rss[index],col="red",pch=10)
+
+
+car::vif(lm(SalePrice~OverallQual+GarageType+SaleCondition,data=Housing))
+
+housing.stepfit<-lm(SalePrice~OverallQual+GarageType+SaleCondition, data = train)
+
+par(mfrow=c(2,2))
+plot(housing.stepfit)
+```
+
+
+```{r}
+#summary(housing.fwdfit)
+#summary(housing.backfit)
+summary(housing.stepfit)
+
+```
+
+####UPDATED 2.11 LEI Number of predictors vs. ASE
+
+```{r}
+
+set.seed(1234)
+index<-sample(1:dim(Housing)[1],1460/2,replace=F)
+train<-Housing[index,]
+test<-Housing[-index,]
+
+train <- na.omit(train)
+test <- na.omit(test)
+
+#dim(train)
+#dim(test)
+
+#[1] 674  71
+#[1] 665  71
+
+#dim(Housing)
+#[1] 1460   71
+
+library(leaps)
+reg.fwd=regsubsets(LogSalePrice~.,data=train,method="forward",nvmax=70)
+
+#Really handy predict function
+predict.regsubsets =function (object , newdata ,id ,...){
+  form=as.formula (object$call [[2]])
+  mat=model.matrix(form ,newdata )
+  coefi=coef(object ,id=id)
+  xvars=names(coefi)
+  mat[,xvars]%*%coefi
+}
+
+
+testASE<-c()
+#note my index is to 70 since that what I set it in regsubsets
+for (i in 1:70){
+  predictions<-predict.regsubsets(object=reg.fwd,newdata=test,id=i) 
+  testASE[i]<-mean((test$LogSalePrice-predictions)^2)
+}
+
+par(mfrow=c(1,1))
+plot(1:70,testASE,type="l",xlab="# of predictors",ylab="test vs train ASE",ylim=c(0,1))
+index<-which(testASE==min(testASE))
+points(index,testASE[index],col="red",pch=10)
+rss<-summary(reg.fwd)$rss
+lines(1:70,rss/665,lty=3,col="blue")  #Dividing by  since ASE=RSS/sample size
+```
+
+
+###Lasso
+####UPDATE 2.11 LEI. 
+####correlation matrix for continous varaibles, remove obvious one. lasso takes care of slight multicolinearity.
+```{r}
+library(glmnet)
+
+# JR - Added line to eliminate NAs.  Not sure if correct solution, but allowed lasso to run.
+# https://stackoverflow.com/questions/6447708/model-matrix-generates-fewer-rows-than-original-data-frame
+train <- na.omit(train)
+
+test <- na.omit(test)
+
+#Formatting data for GLM net
+x=model.matrix(SalePrice~.,train)[,-1]
+y=log(train$SalePrice)
+
+
+xtest<-model.matrix(SalePrice~.,test)[,-1]
+ytest<-log(test$SalePrice)
+
+#dim(train)
+#str(train)
+#str(x)
+#str(y)
+
+grid=10^seq(10,-2, length =730)
+lasso.mod=glmnet(x,y,alpha=1, lambda =grid)
+
+cv.out=cv.glmnet(x,y,alpha=1) #alpha=1 performs LASSO
+plot(cv.out)
+
+
+bestlambda<-cv.out$lambda.min  #Optimal penalty parameter.  You can make this call visually.
+lasso.pred=predict (lasso.mod ,s=bestlambda ,newx=xtest)
+
+testMSE_LASSO<-mean((ytest-lasso.pred)^2)
+testMSE_LASSO
+
+
+coef(lasso.mod,s=bestlambda)
+```
+
+
+####Update 2 two way anova####
+```{r}
+#create a data frame with OUTPUT SalePrice AND two catagorical predictors Neighborhood 25 levels, HouseStyle 8 levels for two way anova
+
+#dim(Housing)
+#str(Housing)
+#which( colnames(HousingData)=="Neighborhood" )
+
+#which( colnames(HousingData)=="HouseStyle" )
+#which( colnames(HousingData)=="SalePrice" )
+
+HousingANOVA <- Housing[, c(10,18,71)]  #use RoofStyle which has 6 levels to replace neighborhood with 25 levels
+
+str(HousingANOVA )
+head(HousingANOVA)
+
+```
+
+####UPDATE 2.11 LEI.  
+#### Prepare for final HousingANOVA dataset--subset data Neighborhoods with some HouseStyles
+```{r}
+#attach(HousingANOVAPre )
+#plot(Neighborhood, HouseStyle,col=c(1:8))
+
+
+attach(HousingANOVA )
+plot(RoofStyle,HouseStyle,col=c(1:8))
+
+
+
+```
+
+####based on the graph above, subset data Neighborhoods with some HouseStyles. FINAL dataset HousingANOVA
+```{r}
+
+
+```
+
+
+
+
+###mean plot of transformed data
+```{r}
+#Provide a means plot of the data.
+attach(HousingANOVA)
+mysummary<-function(x){
+  result<-c(length(x),mean(x),sd(x),sd(x)/sqrt(length(x)),min(x), max(x), IQR(x))
+  names(result)<-c("N","Mean","SD","SE","MIN","MAX", "IQR")
+  return(result)
+}
+sumstats<-aggregate(LogSalePrice~RoofStyle*HouseStyle,data=HousingANOVA,mysummary)
+sumstats<-cbind(sumstats[,1:2],sumstats[,-(1:2)])
+sumstats
+
+ggplot(sumstats,aes(x=RoofStyle,y=Mean,group=HouseStyle,colour=HouseStyle))+
+  ylab("SalePrice")+
+  geom_line()+
+  geom_point()+
+  geom_errorbar(aes(ymin=Mean-SE,ymax=Mean+SE),width=.1)
+  
+#SD as error bar
+  ggplot(sumstats,aes(x=RoofStyle,y=Mean,group=HouseStyle,colour=HouseStyle))+
+  ylab("LogSalePrice")+
+  geom_line()+
+  geom_point()+
+  geom_errorbar(aes(ymin=Mean-SD,ymax=Mean+SD),width=.1)
+```
+#fit
+#Q: how to check for outlier?
+```{r}
+ #Fit a nonadditive 2 way anova model to transformed data and provide the residual diagnostics.
+  model.fit<-aov(LogSalePrice~Neighborhood+HouseStyle+Neighborhood*HouseStyle,data=HousingANOVA)
+par(mfrow=c(1,2))
+plot(model.fit$fitted.values,model.fit$residuals,ylab="Resdiduals",xlab="Fitted")
+qqnorm(model.fit$residuals)
+
+# the normality assumption met after log transformation of y
+
+```
+
+####First layer of test. High level test. Provide the type 3 ANOVA F-tests. Type III SS tested on interactions (the presence of a main effect after the other main effect and interaction)
+```{r}
+#provide the type 3 ANOVA F-tests
+library(car)
+Anova(model.fit,type=3)
+```
+####Mutiple testing corrections
+
+```{r}
+TukeyHSD(model.fit,"Background",conf.level=.95)
+```
+####Second layer of test. write contrast. 
+```{r}
+
+```
+
