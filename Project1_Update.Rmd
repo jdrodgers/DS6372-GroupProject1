@@ -14,12 +14,14 @@ library(tidyverse)
 library(leaps)
 library(caret)
 library(car)
+library(MASS)
+library(ggvis)
 
 
 #Set path to housing data.
 # JR - Changed path to be relative path assuming rproj file in same directory as rmd files. 
 #       Should help with running it on separate workstations
-Project <- "./ImportedFiles/train_clean_final.csv"
+Project <- "/Users/Chase/Desktop/MSDS/MSDS6306/Homework/SMU_MSDS_Homework/Case_Study_1/DS6372-GroupProject1/ImportedFiles/train_clean_final.csv"
 
 HousingData <- read.csv(Project)
 dim(HousingData)
@@ -64,6 +66,7 @@ Housing <- HousingData[, -c(1,4,7,15,58,73:76,79)] #Removes unnessary predictor 
 #(1460   71)
 
 head(Housing)
+tail(Housing)
 ```
 ####EDA
 ```{r}
@@ -73,19 +76,60 @@ head(Housing)
 ```{r Train and Test Samples}
 #Following code creates training and test samples. 
 set.seed(1234)
-index<-sample(1:dim(Housing)[1],1460/2,replace=F)
+index<-sample(1:dim(Housing)[1],nrow(Housing)/2,replace=F)
 train<-Housing[index,]
 test<-Housing[-index,]
 
-#Forward
-reg.fwd<-regsubsets(SalePrice~.,data=train, method = "forward", really.big = T, nvmax = 20)
 
-coef(reg.fwd,3)
+#Forward Model
+reg.fwd<-regsubsets(SalePrice~.,data=train, method = "forward", really.big = T, nvmax = 20)
+coef(reg.fwd, 19)
+
+
+```
+
+```{r}
+#Alternate Forward Model with better results accessibility
+train.control <- trainControl(method = "cv", number = 5)
+
+forward.model <- train(SalePrice ~., data = train, method = "leapForward", tuneGrid = data.frame(nvmax = 1:20),trControl = train.control, na.action = na.exclude)
+
+names(results)
+
+#Graphs to Feature impact on MSE, RMSE, and Rsquared based on Trainining Data
+results <- forward.model$results
+results %>%
+    ggvis(x=~ nvmax, y=~RMSE^2) %>%
+  layer_points(fill= ~ RMSE^2, size = ~ RMSE^2) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "MSE") %>%
+  add_axis("x", title = "Features")
+
+results %>%
+    ggvis(x=~ nvmax, y=~RMSE) %>%
+  layer_points(fill= ~ RMSE, size = ~ RMSE) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "RMSE") %>%
+  add_axis("x", title = "Features")
+
+results %>%
+    ggvis(x=~ nvmax, y=~Rsquared) %>%
+  layer_points(fill= ~ Rsquared, size = ~ Rsquared) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "Rsquared") %>%
+  add_axis("x", title = "Features")
+
+#Suggests ideal feature number
+forward.model$bestTune
+##summary(forward.model$finalModel)
+coef(forward.model$finalModel, 16)
+
+##Uses other reg.fwd model to sanity check the models, same features recommended in either case. 
+coef(reg.fwd, 16)
 
 summary(reg.fwd)$adjr2
 summary(reg.fwd)$rss
 summary(reg.fwd)$bic
-
 
 par(mfrow=c(1,3))
 bics<-summary(reg.fwd)$bic
@@ -103,16 +147,12 @@ plot(1:21,rss,type="l",ylab="train RSS",xlab="# of predictors")
 index<-which(rss==min(rss))
 points(index,rss[index],col="red",pch=10)
 
-
-car::vif(lm(SalePrice~HouseStyle+GrLivArea+SaleCondition,data=Housing))
-
-housing.fwdfit<-lm(SalePrice~HouseStyle+GrLivArea+SaleCondition, data = train)
-
-par(mfrow=c(2,2))
-plot(housing.fwdfit)
 ```
 
+
+
 ```{r Backward}
+
 #Backward
 reg.back<-regsubsets(SalePrice~.,data=train, method = "backward", really.big = T, nvmax = 20)
 
@@ -140,19 +180,187 @@ index<-which(rss==min(rss))
 points(index,rss[index],col="red",pch=10)
 
 
-car::vif(lm(SalePrice~OverallQual+Functional+Fireplaces,data=Housing))
+backward.model <- train(SalePrice ~., data = train, method = "leapBackward", tuneGrid = data.frame(nvmax = 1:20),trControl = train.control, na.action = na.exclude)
 
-housing.backfit<-lm(SalePrice~OverallQual+Functional+Fireplaces, data = train)
+#Graphs to Feature impact on MSE, RMSE, and Rsquared based on Trainining Data
+back.results <- backward.model$results
+results %>%
+    ggvis(x=~ nvmax, y=~RMSE^2) %>%
+  layer_points(fill= ~ RMSE^2, size = ~ RMSE^2) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "MSE") %>%
+  add_axis("x", title = "Features")
 
-par(mfrow=c(2,2))
-plot(housing.backfit)
+back.results %>%
+    ggvis(x=~ nvmax, y=~RMSE) %>%
+  layer_points(fill= ~ RMSE, size = ~ RMSE) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "RMSE") %>%
+  add_axis("x", title = "Features")
+
+back.results %>%
+    ggvis(x=~ nvmax, y=~Rsquared) %>%
+  layer_points(fill= ~ Rsquared, size = ~ Rsquared) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "Rsquared") %>%
+  add_axis("x", title = "Features")
+
+#Suggests ideal feature number
+backward.model$bestTune
+##summary(forward.model$finalModel)
+coef(backward.model$finalModel, 18)
+
+##Uses other reg.fwd model to sanity check the models, same features recommended in either case. 
+coef(reg.back, 18)
+
+
+
 ```
 
+
+Backward regression model with 18 predictors had greatest Rsquared return in comparison with stepwise and forward. The following features were output. 
+
+LotArea 
+NeighborhoodNoRidge 
+NeighborhoodNridgHt 
+NeighborhoodStoneBr 
+BldgTypeTwnhsE 
+OverallQual 
+OverallCond 
+YearBuilt 
+RoofMatlCompShg 
+RoofMatlTar&Grv 
+RoofMatlWdShngl 
+Exterior1stBrkFace 
+Exterior1stCBlock 
+BsmtFinType1Unf 
+BsmtFinSF1 
+HeatingQCPo 
+FunctionalTyp 
+Fireplaces
+
+```{r}
+library(fastDummies)
+library(gridExtra)
+
+#Created new df for train for consolidating columns with dummy variables
+train.new <- train
+
+train.new$Neighborhood.dummy <- train.new$Neighborhood
+
+
+train.new$Neighborhood.dummy <- as.factor(ifelse(train.new$Neighborhood == "NridgHt", "NridgHt", ifelse(train.new$Neighborhood == "NoRidge", "NoRidge", (ifelse(train.new$Neighborhood == "StoneBr", "StoneBr", "Other")))))
+
+class(train.new$Neighborhood.dummy)
+train.new$Neighborhood.dummy
+
+train.new$BldgTypeTwnhsE <- as.factor(ifelse(train.new$BldgType == "TwnhsE", "TwnhsE", "Other"))
+
+train.new$RoofMat.dummy <- as.factor(ifelse(train.new$RoofMatl == "CompShg", "CompShg", ifelse(train.new$RoofMatl == "Tar&Grv", "Tar&Grv", (ifelse(train.new$RoofMatl == "WdShngl", "WdShngl", "Other")))))
+
+train.new$Exterior1st.dummy <- as.factor(ifelse(train.new$Exterior1st == "BrkFace", "BrkFace", ifelse(train.new$Exterior1st == "CBlock", "CBlock", "Other")))
+
+train.new$BsmtFinType1Unf <- as.factor(ifelse(train.new$BsmtFinType1 == "Unf", "Unf", "Other"))
+
+train.new$HeatingQCPo <- as.factor(ifelse(train.new$HeatingQC == "Po", "Po", "Other"))
+
+train.new$FunctionalTyp <- as.factor(ifelse(train.new$Functional == "Typ", "Typ", "Other"))
+
+head(train.new)
+
+backward.enhanced <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+OverallCond+YearBuilt+RoofMat.dummy+Exterior1st.dummy+BsmtFinType1Unf+BsmtFinSF1+HeatingQCPo+FunctionalTyp+Fireplaces, data = train.new)
+
+summary(backward.enhanced)
+plot(backward.enhanced)
+
+
+```
+
+```{r backward enhanced model 2}
+backward.enhanced2 <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+RoofMat.dummy+Exterior1st.dummy+BsmtFinType1Unf+BsmtFinSF1+Fireplaces, data = train.new)
+
+summary(backward.enhanced2)
+plot(backward.enhanced2)
+```
+
+```{r backward enhanced model 3}
+#Used code below to experiment with altering the dummy variables for neighborhood to make only have signifigant p-values for neighborhood otherwise changed to other. No successful gains on adjust r squared with changes. 
+train.new$Neighborhood.dummy2 <- as.factor(ifelse(train.new$Neighborhood == "NridgHt", "NridgHT_NoRidge_StoneBr", ifelse(train.new$Neighborhood == "NoRidge", "NridgHT_NoRidge_StoneBr", (ifelse(train.new$Neighborhood == "StoneBr", "NridgHT_NoRidge_StoneBr", "Other")))))
+
+#Seven feature linear model nearly as significant as the backward eighteen feature suggested model after dummy variables and consolidation employed.
+backward.enhanced3 <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = train.new)
+
+summary(backward.enhanced3)
+plot(backward.enhanced3)
+
+test.new <- test
+test.new$Neighborhood.dummy <- as.factor(ifelse(test.new$Neighborhood == "NridgHt", "NridgHt", ifelse(test.new$Neighborhood == "NoRidge", "NoRidge", (ifelse(test.new$Neighborhood == "StoneBr", "StoneBr", "Other")))))
+
+test.new$BldgTypeTwnhsE <- as.factor(ifelse(test.new$BldgType == "TwnhsE", "TwnhsE", "Other"))
+
+mod.pred <- predict(backward.enhanced3, test.new)
+
+summary(mod.pred)
+plot(mod.pred)
+
+actuals_preds <- data.frame(cbind(actuals=test.new$SalePrice, predicteds=mod.pred))  # make actuals_predicteds dataframe.
+correlation_accuracy <- cor(actuals_preds)
+head(correlation_accuracy)
+
+head(backward.enhanced3)
+
+backward.enhanced3.fits<-data.frame(fitted.values=backward.enhanced3$fitted.values,residuals=backward.enhanced3$residuals)
+
+#Residual vs Fitted
+plot1<-ggplot(backward.enhanced3.fits,aes(x=fitted.values,y=residuals))+ylab("Residuals")+
+  xlab("Predicted")+geom_point()
+
+#QQ plot of residuals  #Note the diagonal abline is only good for qqplots of normal data.
+plot2<-ggplot(backward.enhanced3.fits,aes(sample=residuals))+
+  stat_qq()+geom_abline(intercept=mean(backward.enhanced3.fits$residuals), slope = sd(backward.enhanced3.fits$residuals))
+
+#Histogram of residuals
+plot3<-ggplot(backward.enhanced3.fits, aes(x=residuals)) + 
+  geom_histogram(aes(y=..density..),binwidth=102,color="blue", fill="red")+
+  geom_density(alpha=.99, fill="red")
+
+grid.arrange(plot1, plot2, plot3, ncol=3)
+```
+
+```{r test data anaylsis}
+
+test.backward <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = test.new)
+
+summary(test.backward)
+plot(test.backward)
+
+test.backward.fits<-data.frame(fitted.values=test.backward$fitted.values,residuals=test.backward$residuals)
+
+#Residual vs Fitted
+test.plot1<-ggplot(test.backward.fits,aes(x=fitted.values,y=residuals))+ylab("Residuals")+
+  xlab("Predicted")+geom_point()
+
+#QQ plot of residuals  #Note the diagonal abline is only good for qqplots of normal data.
+test.plot2<-ggplot(test.backward.fits,aes(sample=residuals))+
+  stat_qq()+geom_abline(intercept=mean(test.backward.fits$residuals), slope = sd(test.backward.fits$residuals))
+
+#Histogram of residuals
+test.plot3<-ggplot(test.backward.fits, aes(x=residuals)) + 
+  geom_histogram(aes(y=..density..),binwidth=102,color="blue", fill="red")+
+  geom_density(alpha=.99, fill="red")
+
+grid.arrange(test.plot1, test.plot2, test.plot3, ncol=3)
+```
+After 
+
 ```{r Stepwise}
+
+#Stepwise performed for testing purposes. Best model option was backward regression. Left here as a history of attempts.
+
 #Stepwise
 reg.step<-regsubsets(SalePrice~.,data=train, method = "seqrep", really.big = T, nvmax = 20)
 
-coef(reg.step,3)
+coef(reg.step,15)
 
 summary(reg.step)$adjr2
 summary(reg.step)$rss
@@ -175,20 +383,35 @@ plot(1:21,rss,type="l",ylab="train RSS",xlab="# of predictors")
 index<-which(rss==min(rss))
 points(index,rss[index],col="red",pch=10)
 
+stepwise.model <- train(SalePrice ~., data = train, method = "leapSeq", tuneGrid = data.frame(nvmax = 1:20),trControl = train.control, na.action = na.exclude)
 
-car::vif(lm(SalePrice~OverallQual+GarageType+SaleCondition,data=Housing))
+#Graphs to Feature impact on MSE, RMSE, and Rsquared based on Trainining Data
+step.results <- stepwise.model$results
+results %>%
+    ggvis(x=~ nvmax, y=~RMSE^2) %>%
+  layer_points(fill= ~ RMSE^2, size = ~ RMSE^2) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "MSE") %>%
+  add_axis("x", title = "Features")
 
-housing.stepfit<-lm(SalePrice~OverallQual+GarageType+SaleCondition, data = train)
+step.results %>%
+    ggvis(x=~ nvmax, y=~RMSE) %>%
+  layer_points(fill= ~ RMSE, size = ~ RMSE) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "RMSE") %>%
+  add_axis("x", title = "Features")
 
-par(mfrow=c(2,2))
-plot(housing.stepfit)
-```
+step.results %>%
+    ggvis(x=~ nvmax, y=~Rsquared) %>%
+  layer_points(fill= ~ Rsquared, size = ~ Rsquared) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "Rsquared") %>%
+  add_axis("x", title = "Features")
 
-
-```{r}
-summary(housing.fwdfit)
-summary(housing.backfit)
-summary(housing.stepfit)
+#Suggests ideal feature number
+stepwise.model$bestTune
+##summary(forward.model$finalModel)
+coef(stepwise.model$finalModel, 16)
 
 ```
 
