@@ -54,6 +54,13 @@ which( colnames(HousingData)=="FireplaceQu" )
 
 ```
 ####Removes unnessary predictor columns from dataset
+ID removed due to it providing no relavent descriptive feature
+Alley not a feature present in enough of the samples, determined not to be a significant enough feature.
+Condition2 was found to be too correlated with condition1.
+PoolQC too multicollineated with Pool feature.
+MiscFeature/ MiscVal presented no relavent descriptive features.
+SaleType considered not relavent to SalePrice.
+
 ```{r}
 
 Housing <- HousingData[, -c(1,4,7,15,58,73:76,79)] #Removes unnessary predictor columns from dataset
@@ -96,7 +103,9 @@ forward.model <- train(SalePrice ~., data = train, method = "leapForward", tuneG
 
 names(results)
 
-#Graphs to Feature impact on MSE, RMSE, and Rsquared based on Trainining Data
+#The following are graphs for Feature impact on MSE, RMSE, and Rsquared based on Training Data.
+
+#Forward Model MSE
 results <- forward.model$results
 results %>%
     ggvis(x=~ nvmax, y=~RMSE^2) %>%
@@ -105,6 +114,7 @@ results %>%
   add_axis("y", title = "MSE") %>%
   add_axis("x", title = "Features")
 
+#Forward Model RMSE
 results %>%
     ggvis(x=~ nvmax, y=~RMSE) %>%
   layer_points(fill= ~ RMSE, size = ~ RMSE) %>%
@@ -112,6 +122,7 @@ results %>%
   add_axis("y", title = "RMSE") %>%
   add_axis("x", title = "Features")
 
+#Forward Model RSquared
 results %>%
     ggvis(x=~ nvmax, y=~Rsquared) %>%
   layer_points(fill= ~ Rsquared, size = ~ Rsquared) %>%
@@ -131,17 +142,20 @@ summary(reg.fwd)$adjr2
 summary(reg.fwd)$rss
 summary(reg.fwd)$bic
 
+#BIC against # of Predictors/Features
 par(mfrow=c(1,3))
 bics<-summary(reg.fwd)$bic
 plot(1:21,bics,type="l",ylab="BIC",xlab="# of predictors")
 index<-which(bics==min(bics))
 points(index,bics[index],col="red",pch=10)
 
+#Adjusted RSquare against # of Predictors/Features
 adjr2<-summary(reg.fwd)$adjr2
 plot(1:21,adjr2,type="l",ylab="Adjusted R-squared",xlab="# of predictors")
 index<-which(adjr2==max(adjr2))
 points(index,adjr2[index],col="red",pch=10)
 
+#RSS against # of Predictors/Features
 rss<-summary(reg.fwd)$rss
 plot(1:21,rss,type="l",ylab="train RSS",xlab="# of predictors")
 index<-which(rss==min(rss))
@@ -162,18 +176,20 @@ summary(reg.back)$adjr2
 summary(reg.back)$rss
 summary(reg.back)$bic
 
-
+#BIC against # of Predictors/Features
 par(mfrow=c(1,3))
 bics<-summary(reg.back)$bic
 plot(1:21,bics,type="l",ylab="BIC",xlab="# of predictors")
 index<-which(bics==min(bics))
 points(index,bics[index],col="red",pch=10)
 
+#Adjusted RSquare against # of Predictors/Features
 adjr2<-summary(reg.back)$adjr2
 plot(1:21,adjr2,type="l",ylab="Adjusted R-squared",xlab="# of predictors")
 index<-which(adjr2==max(adjr2))
 points(index,adjr2[index],col="red",pch=10)
 
+#RSS against # of Predictors/Features
 rss<-summary(reg.back)$rss
 plot(1:21,rss,type="l",ylab="train RSS",xlab="# of predictors")
 index<-which(rss==min(rss))
@@ -182,7 +198,8 @@ points(index,rss[index],col="red",pch=10)
 
 backward.model <- train(SalePrice ~., data = train, method = "leapBackward", tuneGrid = data.frame(nvmax = 1:20),trControl = train.control, na.action = na.exclude)
 
-#Graphs to Feature impact on MSE, RMSE, and Rsquared based on Trainining Data
+#Graphs to Feature impact on MSE, RMSE, and Rsquared based on Trainining Data.
+#Backward Model MSE
 back.results <- backward.model$results
 results %>%
     ggvis(x=~ nvmax, y=~RMSE^2) %>%
@@ -191,6 +208,7 @@ results %>%
   add_axis("y", title = "MSE") %>%
   add_axis("x", title = "Features")
 
+#Backward Model RMSE
 back.results %>%
     ggvis(x=~ nvmax, y=~RMSE) %>%
   layer_points(fill= ~ RMSE, size = ~ RMSE) %>%
@@ -198,6 +216,7 @@ back.results %>%
   add_axis("y", title = "RMSE") %>%
   add_axis("x", title = "Features")
 
+#Backward Model RSquared
 back.results %>%
     ggvis(x=~ nvmax, y=~Rsquared) %>%
   layer_points(fill= ~ Rsquared, size = ~ Rsquared) %>%
@@ -218,7 +237,7 @@ coef(reg.back, 18)
 ```
 
 
-Backward regression model with 18 predictors had greatest Rsquared return in comparison with stepwise and forward. The following features were output. 
+Backward regression model with 18 predictors had greatest Rsquared return in comparison with stepwise and forward. The following features were the recommended backward output.  
 
 LotArea 
 NeighborhoodNoRidge 
@@ -239,6 +258,8 @@ HeatingQCPo
 FunctionalTyp 
 Fireplaces
 
+Original output contains too many features. Fear of overtraining the model. First step was to consolidate the recommended features that were either single variables within a column of variables using a dummy variable assignment. Or if more than one variable within a column considered significant but all others not significant than all other variables were recoded as Other.
+
 ```{r}
 library(fastDummies)
 library(gridExtra)
@@ -246,78 +267,100 @@ library(gridExtra)
 #Created new df for train for consolidating columns with dummy variables
 train.new <- train
 
+#Creates a column based on Neighborhood that will be used for dummy "other" variables.
 train.new$Neighborhood.dummy <- train.new$Neighborhood
 
-
+#Alters the Neighborhood.dummy column to keep NridgHt, NoRidge, and StoneBr while coverting all other neighborhood variables into "Other"
 train.new$Neighborhood.dummy <- as.factor(ifelse(train.new$Neighborhood == "NridgHt", "NridgHt", ifelse(train.new$Neighborhood == "NoRidge", "NoRidge", (ifelse(train.new$Neighborhood == "StoneBr", "StoneBr", "Other")))))
 
+#Checks the class and views the altered Neighborhood.dummy column to be sure changes have properly be made
 class(train.new$Neighborhood.dummy)
 train.new$Neighborhood.dummy
 
+#Creates a column based on the BldgType feature that contains building types with TwnhsE and Other as the variables. Similar to a yes or no dummy column
 train.new$BldgTypeTwnhsE <- as.factor(ifelse(train.new$BldgType == "TwnhsE", "TwnhsE", "Other"))
 
+#Creates a RootMat.dummy column based on the RoofMat feature with only CompShg, Tar&Grv, WdShngl variables and all other variables renamed "Other"
 train.new$RoofMat.dummy <- as.factor(ifelse(train.new$RoofMatl == "CompShg", "CompShg", ifelse(train.new$RoofMatl == "Tar&Grv", "Tar&Grv", (ifelse(train.new$RoofMatl == "WdShngl", "WdShngl", "Other")))))
 
+#Creates a Exterior1st.dummy column based on the Exterior1st feature with only BrkFace, Tar&CBlock variables and all other variables renamed "Other"
 train.new$Exterior1st.dummy <- as.factor(ifelse(train.new$Exterior1st == "BrkFace", "BrkFace", ifelse(train.new$Exterior1st == "CBlock", "CBlock", "Other")))
 
+#Creates a column based on the BsmtFinType1 feature that contains basement types with Unf and Other as the variables. Similar to a yes or no dummy column
 train.new$BsmtFinType1Unf <- as.factor(ifelse(train.new$BsmtFinType1 == "Unf", "Unf", "Other"))
 
+#Creates a column based on the HeatingQC feature that contains heating types with Po and Other as the variables. Similar to a yes or no dummy column
 train.new$HeatingQCPo <- as.factor(ifelse(train.new$HeatingQC == "Po", "Po", "Other"))
 
+#Creates a column based on the Functional feature that contains functional types with Typ and Other as the variables. Similar to a yes or no dummy column
 train.new$FunctionalTyp <- as.factor(ifelse(train.new$Functional == "Typ", "Typ", "Other"))
 
+#Checks new columns to assure correctness
 head(train.new)
 
+#Fit backward inspired model with newly configured and consolidated feature columns
 backward.enhanced <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+OverallCond+YearBuilt+RoofMat.dummy+Exterior1st.dummy+BsmtFinType1Unf+BsmtFinSF1+HeatingQCPo+FunctionalTyp+Fireplaces, data = train.new)
 
+#Diagnostics and plotting of enhanced backward model
 summary(backward.enhanced)
 plot(backward.enhanced)
 
 
 ```
 
-After consolidating the backwards regression suggested features went through removing features with a statistically insignificant p-value, removed:
+After consolidating the backwards regression features, enhanced backwards model diagnostics showed features that may not be significantly impacting the regressing model. Based on p-value significance the following features were removed from the fit model to simplify it: 
 OverallCond
 HeatingQCPo
 FunctionalTyp
 
 ```{r backward enhanced model 2}
+#Fit backward enhanded 2 model with above features removed
 backward.enhanced2 <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+RoofMat.dummy+Exterior1st.dummy+BsmtFinType1Unf+BsmtFinSF1+Fireplaces, data = train.new)
 
+#Diagnoistics and plot
 summary(backward.enhanced2)
 plot(backward.enhanced2)
 ```
 
-Continued removed statistically insignificant p-value features from model, removed:
+Continued elimination of statistically insignificant p-value features from model, removed:
 Roofmat.dummy
 Exterior1st.dummy
 BsmtFinType1Unf
 
 ```{r backward enhanced model 3}
-#Used code below to experiment with altering the dummy variables for neighborhood to make only have signifigant p-values for neighborhood otherwise changed to other. No successful gains on adjust r squared with changes. 
+#Used code below to experiment with altering the dummy variables for neighborhood to make only have signifigant p-values for neighborhood otherwise changed to other. No successful gains on adjust r squared with changes. Abondaned Neighborhood alterations. 
 train.new$Neighborhood.dummy2 <- as.factor(ifelse(train.new$Neighborhood == "NridgHt", "NridgHT_NoRidge_StoneBr", ifelse(train.new$Neighborhood == "NoRidge", "NridgHT_NoRidge_StoneBr", (ifelse(train.new$Neighborhood == "StoneBr", "NridgHT_NoRidge_StoneBr", "Other")))))
 
-#Seven feature linear model nearly as significant as the backward eighteen feature suggested model after dummy variables and consolidation employed.
+#Seven feature linear model nearly as significant as the backward eighteen feature suggested model after dummy variables and consolidation employed. Accuracy gains through including the additional features were negligable compared to the simpler model listed below
 backward.enhanced3 <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = train.new)
 
+#Diagnostics and plotting of final backward inspired model
 summary(backward.enhanced3)
 plot(backward.enhanced3)
+```
 
+The following code adds the matching feature columns present in the new Train data to the new Test data for testing. 
+```{r Test Data Feature Matching to Train}
+#Create dataframe based on test data
 test.new <- test
+
+#Creates new neighborhood feature based on train.new dataframe 
 test.new$Neighborhood.dummy <- as.factor(ifelse(test.new$Neighborhood == "NridgHt", "NridgHt", ifelse(test.new$Neighborhood == "NoRidge", "NoRidge", (ifelse(test.new$Neighborhood == "StoneBr", "StoneBr", "Other")))))
 
+#Creates new BldgType feature based on train.new dataframe 
 test.new$BldgTypeTwnhsE <- as.factor(ifelse(test.new$BldgType == "TwnhsE", "TwnhsE", "Other"))
 
+#Predict function based on final backward model to test.new data
 mod.pred <- predict(backward.enhanced3, test.new)
 
+#Summary and plot
 summary(mod.pred)
 plot(mod.pred)
 
+#Testing actual plots to predictions
 actuals_preds <- data.frame(cbind(actuals=test.new$SalePrice, predicteds=mod.pred))  # make actuals_predicteds dataframe.
 correlation_accuracy <- cor(actuals_preds)
 head(correlation_accuracy)
-
-head(backward.enhanced3)
 
 backward.enhanced3.fits<-data.frame(fitted.values=backward.enhanced3$fitted.values,residuals=backward.enhanced3$residuals)
 
@@ -349,11 +392,14 @@ Fireplaces
 
 ```{r test data anaylsis}
 
+#Fit best backward model against test data
 test.backward <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = test.new)
 
+#Summary of results and plot.
 summary(test.backward)
 plot(test.backward)
 
+#Residuals
 test.backward.fits<-data.frame(fitted.values=test.backward$fitted.values,residuals=test.backward$residuals)
 
 #Residual vs Fitted
@@ -371,7 +417,7 @@ test.plot3<-ggplot(test.backward.fits, aes(x=residuals)) +
 
 grid.arrange(test.plot1, test.plot2, test.plot3, ncol=3)
 ```
-
+The following code was to compare Stepwise regression to Forward and Backward results. Stepwise had underperforming Rsquared so it was abandoned for the backward model. 
 
 ```{r Stepwise}
 
@@ -432,6 +478,116 @@ step.results %>%
 stepwise.model$bestTune
 ##summary(forward.model$finalModel)
 coef(stepwise.model$finalModel, 16)
+
+```
+The following data transforms the SalePrice data with log tranformation to improve residual diagnostics for the model fit. QQ and scatter residual plots show improvement after running backwards model against log transformed data. 
+
+```{r Log Transformed SalePrice Data}
+#Log transformation of Sale Price
+train$logSalePrice <- log(train$SalePrice)
+train.new$logSalePrice <- log(train.new$SalePrice)
+
+#Fit of backward model to log transformated train data
+logbackward.model <- train(logSalePrice ~., data = train, method = "leapBackward", tuneGrid = data.frame(nvmax = 1:20),trControl = train.control, na.action = na.exclude)
+
+#Graphs to Feature impact on MSE, RMSE, and Rsquared based on Trainining Data.
+#Backward Model MSE
+logback.results <- logbackward.model$results
+results %>%
+    ggvis(x=~ nvmax, y=~RMSE^2) %>%
+  layer_points(fill= ~ RMSE^2, size = ~ RMSE^2) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "MSE") %>%
+  add_axis("x", title = "Features")
+
+#Backward Model RMSE
+logback.results %>%
+    ggvis(x=~ nvmax, y=~RMSE) %>%
+  layer_points(fill= ~ RMSE, size = ~ RMSE) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "RMSE") %>%
+  add_axis("x", title = "Features")
+
+#Backward Model RSquared
+logback.results %>%
+    ggvis(x=~ nvmax, y=~Rsquared) %>%
+  layer_points(fill= ~ Rsquared, size = ~ Rsquared) %>%
+  layer_lines(stroke := "red") %>%
+  add_axis("y", title = "Rsquared") %>%
+  add_axis("x", title = "Features")
+
+#Suggests ideal feature number
+logbackward.model$bestTune
+##summary(forward.model$finalModel)
+coef(logbackward.model$finalModel, 18)
+
+#Seven feature linear model nearly as significant as the backward eighteen feature suggested model after dummy variables and consolidation employed. Accuracy gains through including the additional features were negligable compared to the simpler model listed below
+backward.enhanced4 <- lm(logSalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = train.new)
+
+#Diagnostics and plotting of final backward inspired model
+summary(backward.enhanced4)
+plot(backward.enhanced4)
+
+#Log Transform test.new
+test.new$logSalePrice <- log(test.new$SalePrice)
+
+#Predict function based on final backward model to test.new data
+logmod.pred <- predict(backward.enhanced4, test.new)
+
+#Summary and plot
+summary(mod.pred)
+plot(mod.pred)
+
+#Testing actual plots to predictions
+actuals_preds <- data.frame(cbind(actuals=test.new$logSalePrice, predicteds=logmod.pred))  # make actuals_predicteds dataframe.
+correlation_accuracy <- cor(actuals_preds)
+head(correlation_accuracy)
+
+backward.enhanced4.fits<-data.frame(fitted.values=backward.enhanced4$fitted.values,residuals=backward.enhanced4$residuals)
+
+#Residual vs Fitted
+plot7<-ggplot(backward.enhanced4.fits,aes(x=fitted.values,y=residuals))+ylab("Residuals")+
+  xlab("Predicted")+geom_point()
+
+#QQ plot of residuals  #Note the diagonal abline is only good for qqplots of normal data.
+plot8<-ggplot(backward.enhanced3.fits,aes(sample=residuals))+
+  stat_qq()+geom_abline(intercept=mean(backward.enhanced3.fits$residuals), slope = sd(backward.enhanced3.fits$residuals))
+
+#Histogram of residuals
+plot9<-ggplot(backward.enhanced3.fits, aes(x=residuals)) + 
+  geom_histogram(aes(y=..density..),binwidth=102,color="blue", fill="red")+
+  geom_density(alpha=.99, fill="red")
+
+grid.arrange(plot7, plot8, plot9, ncol=3)
+```
+The following code takes the log transformed data, applies the transformation to the SalePrice data and runs the model against the test data after tranformation. Residual plots improve as with the train model run. Histogram still shows some right skewing and the QQ plot still has some abnormal tailing but less so when compared with non-transformation data set. 
+
+```{r logSalePrice Test}
+
+#Model fit to log transformed test data
+logtest.backward <- lm(logSalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = test.new)
+
+#Summary and plot
+summary(logtest.backward)
+plot(logtest.backward)
+
+#Residuals
+logtest.backward.fits<-data.frame(fitted.values=test.backward$fitted.values,residuals=test.backward$residuals)
+
+#Residual vs Fitted
+test.plot4<-ggplot(logtest.backward.fits,aes(x=fitted.values,y=residuals))+ylab("Residuals")+ xlab("Predicted")+geom_point()
+
+#QQ plot of residuals  #Note the diagonal abline is only good for qqplots of normal data.
+test.plot5<-ggplot(logtest.backward.fits,aes(sample=residuals))+
+  stat_qq()+geom_abline(intercept=mean(test.backward.fits$residuals), slope = sd(test.backward.fits$residuals))
+
+#Histogram of residuals
+test.plot6<-ggplot(logtest.backward.fits, aes(x=residuals)) + 
+  geom_histogram(aes(y=..density..),binwidth=102,color="blue", fill="red")+
+  geom_density(alpha=.99, fill="red")
+
+grid.arrange(test.plot4, test.plot5, test.plot6, ncol=3)
+
 
 ```
 
