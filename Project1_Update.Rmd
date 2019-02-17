@@ -21,7 +21,7 @@ library(ggvis)
 #Set path to housing data.
 # JR - Changed path to be relative path assuming rproj file in same directory as rmd files. 
 #       Should help with running it on separate workstations
-Project <- "/Users/Chase/Desktop/MSDS/MSDS6306/Homework/SMU_MSDS_Homework/Case_Study_1/DS6372-GroupProject1/ImportedFiles/train_clean_final.csv"
+Project <- "C:\\Users\\Master\\Documents\\GitHub\\DS6372-GroupProject1\\ImportedFiles\\train_clean_final.csv"
 
 HousingData <- read.csv(Project)
 dim(HousingData)
@@ -87,9 +87,10 @@ index<-sample(1:dim(Housing)[1],nrow(Housing)/2,replace=F)
 train<-Housing[index,]
 test<-Housing[-index,]
 
+train$logSalePrice <- log(train$SalePrice)
 
 #Forward Model
-reg.fwd<-regsubsets(SalePrice~.,data=train, method = "forward", really.big = T, nvmax = 20)
+reg.fwd<-regsubsets(logSalePrice~.,data=train, method = "forward", really.big = T, nvmax = 20)
 coef(reg.fwd, 19)
 
 
@@ -99,9 +100,9 @@ coef(reg.fwd, 19)
 #Alternate Forward Model with better results accessibility
 train.control <- trainControl(method = "cv", number = 5)
 
-forward.model <- train(SalePrice ~., data = train, method = "leapForward", tuneGrid = data.frame(nvmax = 1:20),trControl = train.control, na.action = na.exclude)
+forward.model <- train(logSalePrice ~., data = train, method = "leapForward", tuneGrid = data.frame(nvmax = 1:20),trControl = train.control, na.action = na.exclude)
 
-names(results)
+names(forward.model$results)
 
 #The following are graphs for Feature impact on MSE, RMSE, and Rsquared based on Training Data.
 
@@ -267,6 +268,8 @@ library(gridExtra)
 #Created new df for train for consolidating columns with dummy variables
 train.new <- train
 
+train.new$logSalePrice <- log(train.new$SalePrice)
+
 #Creates a column based on Neighborhood that will be used for dummy "other" variables.
 train.new$Neighborhood.dummy <- train.new$Neighborhood
 
@@ -306,6 +309,11 @@ summary(backward.enhanced)
 plot(backward.enhanced)
 
 
+logbackward.enhanced <- lm(logSalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+OverallCond+YearBuilt+RoofMat.dummy+Exterior1st.dummy+BsmtFinType1Unf+BsmtFinSF1+HeatingQCPo+FunctionalTyp+Fireplaces, data = train.new)
+#Diagnostics and plotting of enhanced backward model
+summary(logbackward.enhanced)
+plot(logbackward.enhanced)
+
 ```
 
 After consolidating the backwards regression features, enhanced backwards model diagnostics showed features that may not be significantly impacting the regressing model. Based on p-value significance the following features were removed from the fit model to simplify it: 
@@ -315,7 +323,7 @@ FunctionalTyp
 
 ```{r backward enhanced model 2}
 #Fit backward enhanded 2 model with above features removed
-backward.enhanced2 <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+RoofMat.dummy+Exterior1st.dummy+BsmtFinType1Unf+BsmtFinSF1+Fireplaces, data = train.new)
+backward.enhanced2 <- lm(logSalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+RoofMat.dummy+Exterior1st.dummy+BsmtFinType1Unf+BsmtFinSF1+Fireplaces, data = train.new)
 
 #Diagnoistics and plot
 summary(backward.enhanced2)
@@ -332,7 +340,7 @@ BsmtFinType1Unf
 train.new$Neighborhood.dummy2 <- as.factor(ifelse(train.new$Neighborhood == "NridgHt", "NridgHT_NoRidge_StoneBr", ifelse(train.new$Neighborhood == "NoRidge", "NridgHT_NoRidge_StoneBr", (ifelse(train.new$Neighborhood == "StoneBr", "NridgHT_NoRidge_StoneBr", "Other")))))
 
 #Seven feature linear model nearly as significant as the backward eighteen feature suggested model after dummy variables and consolidation employed. Accuracy gains through including the additional features were negligable compared to the simpler model listed below
-backward.enhanced3 <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = train.new)
+backward.enhanced3 <- lm(logSalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = train.new)
 
 #Diagnostics and plotting of final backward inspired model
 summary(backward.enhanced3)
@@ -343,6 +351,8 @@ The following code adds the matching feature columns present in the new Train da
 ```{r Test Data Feature Matching to Train}
 #Create dataframe based on test data
 test.new <- test
+
+test.new$logSalePrice <- log(test.new$SalePrice)
 
 #Creates new neighborhood feature based on train.new dataframe 
 test.new$Neighborhood.dummy <- as.factor(ifelse(test.new$Neighborhood == "NridgHt", "NridgHt", ifelse(test.new$Neighborhood == "NoRidge", "NoRidge", (ifelse(test.new$Neighborhood == "StoneBr", "StoneBr", "Other")))))
@@ -374,7 +384,7 @@ plot2<-ggplot(backward.enhanced3.fits,aes(sample=residuals))+
 
 #Histogram of residuals
 plot3<-ggplot(backward.enhanced3.fits, aes(x=residuals)) + 
-  geom_histogram(aes(y=..density..),binwidth=102,color="blue", fill="red")+
+  geom_histogram(aes(y=..density..),binwidth=10,color="blue", fill="red")+
   geom_density(alpha=.99, fill="red")
 
 grid.arrange(plot1, plot2, plot3, ncol=3)
@@ -393,7 +403,7 @@ Fireplaces
 ```{r test data anaylsis}
 
 #Fit best backward model against test data
-test.backward <- lm(SalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = test.new)
+test.backward <- lm(logSalePrice~LotArea+Neighborhood.dummy+BldgTypeTwnhsE+OverallQual+YearBuilt+BsmtFinSF1+Fireplaces, data = test.new)
 
 #Summary of results and plot.
 summary(test.backward)
@@ -412,7 +422,7 @@ test.plot2<-ggplot(test.backward.fits,aes(sample=residuals))+
 
 #Histogram of residuals
 test.plot3<-ggplot(test.backward.fits, aes(x=residuals)) + 
-  geom_histogram(aes(y=..density..),binwidth=102,color="blue", fill="red")+
+  geom_histogram(aes(y=..density..),binwidth=10,color="blue", fill="red")+
   geom_density(alpha=.99, fill="red")
 
 grid.arrange(test.plot1, test.plot2, test.plot3, ncol=3)
@@ -424,7 +434,7 @@ The following code was to compare Stepwise regression to Forward and Backward re
 #Stepwise performed for testing purposes. Best model option was backward regression. Left here as a history of attempts.
 
 #Stepwise
-reg.step<-regsubsets(SalePrice~.,data=train, method = "seqrep", really.big = T, nvmax = 20)
+reg.step<-regsubsets(logSalePrice~.,data=train, method = "seqrep", really.big = T, nvmax = 20)
 
 coef(reg.step,15)
 
@@ -449,7 +459,7 @@ plot(1:21,rss,type="l",ylab="train RSS",xlab="# of predictors")
 index<-which(rss==min(rss))
 points(index,rss[index],col="red",pch=10)
 
-stepwise.model <- train(SalePrice ~., data = train, method = "leapSeq", tuneGrid = data.frame(nvmax = 1:20),trControl = train.control, na.action = na.exclude)
+stepwise.model <- train(logSalePrice ~., data = train, method = "leapSeq", tuneGrid = data.frame(nvmax = 1:20),trControl = train.control, na.action = na.exclude)
 
 #Graphs to Feature impact on MSE, RMSE, and Rsquared based on Trainining Data
 step.results <- stepwise.model$results
